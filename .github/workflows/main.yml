@@ -1,0 +1,47 @@
+name: Main
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      # - name: Install Depends
+      #   run: |
+      #     sudo apt-get -y update
+      #     sudo apt-get -y install jq curl wget
+
+      - name: Check
+        id: check_updates
+        run: |
+          pnpm install
+          pnpm remove puppeteer-core
+          pnpm install puppeteer
+          npx puppeteer browsers install chrome
+          node main.js
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot
+          path: screenshot.png
+
+      - name: Download
+        id: download
+        run: |
+          set -x
+          curl "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/${{ steps.check_updates.outputs.version }}" || exit 0
+          wget -O  "${{ steps.check_updates.outputs.filename }}" "${{ steps.check_updates.outputs.download_url }}"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Release
+        if: steps.download.outputs.has_changes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.check_updates.outputs.version }}
+          files: ${{ steps.check_updates.outputs.filename }}
